@@ -1,6 +1,7 @@
 __pycache__
 
-data/cifar*
+cifar_data/*
+dvs_cifar10_data/*
 
 *.pth
 *.log

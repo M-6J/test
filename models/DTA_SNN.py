@@ -4,10 +4,11 @@ from models.DTA import DTA
 
 
 class MS_ResNet(nn.Module):
-    def __init__(self, block, layers, num_classes=10, time_step=6, DTA_ON=True):
+    def __init__(self, block, layers, num_classes=10, time_step=6, DTA_ON=True, dvs=None):
         super(MS_ResNet, self).__init__()
         
-                
+        self.dvs = dvs     
+
         self.T = time_step # time-step
         norm_layer = tdBatchNorm
         self._norm_layer = norm_layer
@@ -16,8 +17,11 @@ class MS_ResNet(nn.Module):
         replace_stride_with_dilation = [False, False, False]
         self.groups = 1
         self.base_width = 64
-        
-        self.input_conv = tdLayer(nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False), 
+        if self.dvs is True: 
+            self.input_conv = tdLayer(nn.Conv2d(2, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False), 
+                                    norm_layer(self.inplanes))
+        else:
+            self.input_conv = tdLayer(nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False), 
                                   norm_layer(self.inplanes))
 
         self.layer1 = self._make_layer(block, 128, layers[0])
@@ -61,7 +65,7 @@ class MS_ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def _forward_impl(self, x):
-        '''encoding'''
+        # DTA ON or OFF
         if self.encoding is not None:
             x = self.input_conv(x)
             img = x
@@ -69,7 +73,7 @@ class MS_ResNet(nn.Module):
             x = self.encoding(img,x)
         else:
             x = self.input_conv(x)
-        '''encoding'''
+    
 
         x = self.layer1(x)
         x = self.layer2(x)
@@ -81,8 +85,12 @@ class MS_ResNet(nn.Module):
         return x
 
     def forward(self, x):
-        x = add_dimention(x, self.T) 
-        return self._forward_impl(x)
+        if self.dvs is True: 
+            return self._forward_impl(x)    
+        
+        else: 
+            x = add_dimention(x, self.T) 
+            return self._forward_impl(x)
 
 
 def ms_resnet(block, layers, **kwargs):

@@ -7,8 +7,9 @@ class DTA(nn.Module):
         super().__init__()
 
         self.T_NA = T_NA(in_planes=out_channels*T, kernel_size=7)
-        self.T_XA = T_XA(in_planes=out_channels, kernel_size=4) 
+        self.T_XA = T_XA(time_step=T) 
         self.sigmoid = nn.Sigmoid()
+        
     def forward(self, x_seq, spikes):
         
         B, T, C, H, W = x_seq.shape 

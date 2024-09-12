@@ -7,4 +7,4 @@
 
 
 ## train
-* bash run.sh
+* bash run_`target dataset`.sh

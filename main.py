@@ -26,7 +26,7 @@ parser.add_argument('--DTA_ON',
 parser.add_argument('--DS',
                     default='',
                     type=str,
-                    help='cifar10, cifar100')
+                    help='cifar10, cifar100, dvs_cifar10')
 
 parser.add_argument('--start_epoch',
                     default=0,
@@ -65,6 +65,10 @@ parser.add_argument('--epochs',
                     type=int,
                     metavar='N',
                     help='number of total epochs to run')
+parser.add_argument('--weight_decay',
+                    type=float,
+                    metavar='N',
+                    help='weight_decay')
 parser.add_argument('--beta', 
                     default=1.0, 
                     type=float,
@@ -107,7 +111,8 @@ def train(model, device, train_loader, criterion, optimizer, epoch, args):
 
     for  i,(images, targets) in enumerate(train_loader):
         optimizer.zero_grad()
-        if args.DS == 'cifar10' or 'cifar100':
+        if args.DS in ['cifar10', 'cifar100']:
+            print('cifar')
             targets = targets.to(device)
             images = images.to(device)
             if args.beta > 0 and r < args.cutmix_prob:
@@ -129,7 +134,8 @@ def train(model, device, train_loader, criterion, optimizer, epoch, args):
                 mean_out = outputs.mean(1)
                 loss = criterion(mean_out, targets)
 #-----------------------------------------------------------------------------------------------------------------------
-        elif args.DS == 'cifar10-dvs':
+        elif args.DS == 'dvs_cifar10':
+            print('dvs_cifar10')
             images, target = images.to(device,non_blocking=True), targets.to(device,non_blocking=True)
             images = images.float()  
             N,T,C,H,W = images.shape
@@ -162,17 +168,17 @@ def test(model, test_loader, device):
     model.eval()
 
     for batch_idx, (inputs, targets) in enumerate(test_loader):
-        if args.DS == 'cifar10' or 'cifar100':
+        if args.DS in ['cifar10', 'cifar100']:
+            print('cifar')
             inputs = inputs.to(device)
             outputs = model(inputs)
             mean_out = outputs.mean(1)
             _, predicted = mean_out.cpu().max(1)
             total += float(targets.size(0))
             correct += float(predicted.eq(targets).sum().item())
-            if batch_idx % 100 == 0:
-                acc = 100. * float(correct) / float(total)
-                print(batch_idx, len(test_loader), ' Acc: %.5f' % acc)
-        elif args.DS == 'cifar10-dvs':
+            
+        elif args.DS == 'dvs_cifar10':
+            print('dvs_cifar10')
             inputs = inputs.to(device, non_blocking=True)
             target = targets.to(device, non_blocking=True)
             N,T,C,H,W = inputs.shape
@@ -192,37 +198,48 @@ if __name__ == '__main__':
     seed_all(args.seed)
 
     if args.DS == 'cifar10':
+        print('cifar10')
         num_CLS = 10
         save_ds_name = 'CIFAR10'
         train_dataset, val_dataset = build_cifar(use_cifar10=True)
     
     elif args.DS == 'cifar100': 
+        print('cifar100')
         num_CLS = 100
         save_ds_name = 'CIFAR100'
         train_dataset, val_dataset = build_cifar(use_cifar10=False)
     
-    elif args.DS == 'cifar10-dvs':
+    elif args.DS == 'dvs_cifar10':
+        print('dvs_cifar10')
         num_CLS = 10
-        save_ds_name = 'CIFAR10-DVS'
-        #origin_set = cifar10_dvs.CIFAR10DVS(root=args.data_dir, data_type='frame', frames_number=args.T, split_by='number')
+        save_ds_name = 'DVSCIFAR10'
         origin_set = cifar10_dvs.CIFAR10DVS(root="./dvs_cifar10_data", data_type='frame', frames_number=args.time_step, split_by='number')
         train_dataset, val_dataset = split_to_train_test_set(0.9, origin_set, 10)    
-  
         
-    if args.DS == 'cifar10' or 'cifar100' or 'cifar10-dvs':
-        DP_model = dta_msresnet18(num_classes=num_CLS, time_step=args.time_step, DTA_ON=args.DTA_ON) #### 
-        DP_model = torch.nn.DataParallel(DP_model).to(device)
+    if args.DS == 'cifar10':
+        print('cifar10')
+        DP_model = dta_msresnet18(num_classes=num_CLS, time_step=args.time_step, DTA_ON=args.DTA_ON, dvs=False) 
+    
+    elif args.DS == 'cifar100':
+        print('cifar100')
+        DP_model = dta_msresnet18(num_classes=num_CLS, time_step=args.time_step, DTA_ON=args.DTA_ON, dvs=False) 
+    
+    elif args.DS == 'dvs_cifar10':
+        print('dvs_cifar10')
+        DP_model = dta_msresnet18(num_classes=num_CLS, time_step=args.time_step, DTA_ON=args.DTA_ON, dvs=True) 
+        
+    DP_model = torch.nn.DataParallel(DP_model).to(device)
 
-        criterion = nn.CrossEntropyLoss().to(device)
-        optimizer = torch.optim.SGD(DP_model.parameters(),lr=args.learning_rate,momentum=0.9,weight_decay=5e-5)
-        scheduler =  torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
+    criterion = nn.CrossEntropyLoss().to(device)
+    optimizer = torch.optim.SGD(DP_model.parameters(),lr=args.learning_rate,momentum=0.9,weight_decay=args.weight_decay)
+    scheduler =  torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.workers, pin_memory=True)
     test_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size,
                                               shuffle=False, num_workers=args.workers, pin_memory=True)
     
-    logger = get_logger(f'{save_ds_name}-S{args.seed}-B{args.batch_size}-T{args.time_step}.log')
+    logger = get_logger(f'{save_ds_name}-S{args.seed}-B{args.batch_size}-T{args.time_step}-E{args.epochs}-LR{args.learning_rate}.log')
     logger.info('start training!')
 
     best_acc = 0
@@ -237,7 +254,7 @@ if __name__ == '__main__':
         if best_acc < facc:
             best_acc = facc
             best_epoch = epoch + 1
-            torch.save(DP_model.module.state_dict(), f'{save_ds_name}-S{args.seed}-B{args.batch_size}-T{args.time_step}.pth.tar')
+            torch.save(DP_model.module.state_dict(), f'{save_ds_name}-S{args.seed}-B{args.batch_size}-T{args.time_step}-E{args.epochs}-LR{args.learning_rate}.pth.tar')
 
         logger.info('Epoch:[{}/{}]\t Best Test acc={:.3f}'.format(best_epoch, args.epochs, best_acc ))
         logger.info('\n')

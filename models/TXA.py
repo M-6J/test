@@ -2,9 +2,9 @@ import torch.nn as nn
 import torch 
 
 class T_XA(nn.Module):
-    def __init__(self, in_planes, kernel_size, ratio = 1):
+    def __init__(self, time_step):
         super(T_XA, self).__init__()
-        self.conv_t = nn.Conv1d(in_channels=6, out_channels=6, 
+        self.conv_t = nn.Conv1d(in_channels=time_step, out_channels=time_step, 
                               kernel_size=3, padding='same', bias=False)
         
         self.conv_c = nn.Conv1d(in_channels=64, out_channels=64,
