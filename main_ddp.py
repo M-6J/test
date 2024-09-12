@@ -32,7 +32,7 @@ def main_worker(rank, args):
         print("Use GPU: {} for training".format(rank))
 
     print('ImageNet')
-    DDP_model = dta_msresnet18(num_classes=1000, time_step=args.time_step, DTA_ON=args.DTA_ON, dvs=False)
+    DDP_model = dta_msresnet_34(num_classes=1000, time_step=args.time_step, DTA_ON=args.DTA_ON)
     DDP_model.to(device)
     DDP_model = nn.SyncBatchNorm.convert_sync_batchnorm(DDP_model)
     DDP_model = DDP(DDP_model, device_ids=[rank], broadcast_buffers=False)
