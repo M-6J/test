@@ -1,0 +1,13 @@
+services:
+  DTA:
+    build: .
+    volumes:
+      - ./:/workspace
+    command: sleep infinity
+    restart: unless-stopped
+    extends:
+      file: docker-compose-gpu.yaml
+      service: gpu
+    ports:
+      - "9876:9876"
+    shm_size: '128gb'

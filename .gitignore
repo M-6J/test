@@ -1,0 +1,9 @@
+__pycache__
+
+data/cifar*
+
+*.pth
+*.log
+*pth.tar
+*.tar
+
