@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch 
 
 class T_XA(nn.Module):
-    def __init__(self, in_planes, kernel_size,ratio = 1):
+    def __init__(self, in_planes, kernel_size, ratio = 1):
         super(T_XA, self).__init__()
         self.conv_t = nn.Conv1d(in_channels=6, out_channels=6, 
                               kernel_size=3, padding='same', bias=False)
