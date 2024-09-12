@@ -10,13 +10,13 @@ import torch.optim as optim
 from torch.cuda.amp import autocast
 import torch.cuda.amp
 from utils.utils import *
+from data.loaders import *
 from models.DTA_SNN import *
 import torch.multiprocessing as mp
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
-
 
 
 def main_worker(rank, args):
@@ -32,7 +32,10 @@ def main_worker(rank, args):
         print("Use GPU: {} for training".format(rank))
 
     print('ImageNet')
+    
     DDP_model = dta_msresnet_34(num_classes=1000, time_step=args.time_step, DTA_ON=args.DTA_ON)
+    
+    
     DDP_model.to(device)
     DDP_model = nn.SyncBatchNorm.convert_sync_batchnorm(DDP_model)
     DDP_model = DDP(DDP_model, device_ids=[rank], broadcast_buffers=False)
@@ -49,11 +52,11 @@ def main_worker(rank, args):
     best_acc = 0.5
     
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(params = DDP_model.parameters(),lr = args.lr ,momentum=0.9,weight_decay=1e-5)
+    optimizer = optim.SGD(params = DDP_model.parameters(),lr = args.learning_rate ,momentum=0.9,weight_decay=1e-5)
     train_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=0)
     
     training_loader, train_sampler = get_training_dataloader(
-        traindir="dataset/train",
+        traindir="./ImageNet_dataset/train",
         num_workers=args.workers,
         batch_size=int(args.batch_size / args.world_size),
         shuffle=False,
@@ -63,7 +66,7 @@ def main_worker(rank, args):
     )
     
     test_loader = get_test_dataloader(
-        valdir="dataset/val",
+        valdir="./ImageNet_dataset/val",
         num_workers=args.workers,
         batch_size=int(args.batch_size / args.world_size),
         shuffle=False,
@@ -72,8 +75,8 @@ def main_worker(rank, args):
     )
                                                
     scaler = torch.cuda.amp.GradScaler()
-
-    if args.resume is not None:
+    
+    if args.resume is not False:
         checkpoint = torch.load(args.pt_path, map_location=torch.device(rank))
         args.start_epoch = checkpoint['epoch'] + 1
         DDP_model.load_state_dict(checkpoint['model_state_dict']) 
@@ -81,7 +84,7 @@ def main_worker(rank, args):
         train_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         if rank == 0:
             print('\nLoaded checkpoint from epoch %d.\n' % int(args.start_epoch))
-
+    
     for epoch in range(args.start_epoch, args.epochs):
         
         train_sampler.set_epoch(epoch)
